@@ -63,3 +63,5 @@ Rules to make sure that microservices do not become Spaghetti
 ### What is oAuth toolkit?
 
 oAuth toolkit is a python package that extends  [oauthlib](https://github.com/oauthlib/oauthlib) for Django framework. It contains basic implementation of oAuth1, oAuth2 and OpenID connect protocols. 
+
+Coninue [here](https://github.com/AbdulMoeed-140212/OAuthToolkit_Django_Roadmap/tree/main/how_to_oauthtoolkit)
