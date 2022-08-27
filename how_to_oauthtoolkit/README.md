@@ -16,11 +16,11 @@ oAuth toolkit is a python package that extends  [oauthlib](https://github.com/oa
 
 ## Where to start?
 
-If you are new to oauth toolkit try out the [toutorial](https://django-oauth-toolkit.readthedocs.io/en/latest/tutorial/tutorial.html), after that lets start with planning out for project structure. After you know what are your targets explore `oauth_provider.models.py` and figure out if existing models suit your needs. All models are swapable they can be inherited to a custom model class and used in place of existing one. 
+If you are new to oauth toolkit try out the [tutorial](https://django-oauth-toolkit.readthedocs.io/en/latest/tutorial/tutorial.html), after that lets start with planning out for project structure. After you know what are your targets explore `oauth_provider.models.py` and figure out if existing models suit your needs. All models can be swapped, they can be inherited to a custom model class and used in place of existing one. 
 
 The reason I'm starting with this is 
 
-1. This is a 2 step process first the migrations are done and then changes in settings.py are applied. doing them in one go did go well for me
+1. This is a 2 step process first the migrations are done and then changes in settings.py are applied. doing them in one go was not successful for me
 2. After a successful swap, you might lose access to existing data, Data needs to be transferred separately
 
 Also the documentation are show one example here is a sample code for Configuring all models
@@ -76,7 +76,7 @@ urlpatterns = [
 ]
 ```
 
-The special thing about this is that namespace of oauth_toolkit urls is the same , that means the reverse will work properly and internal library reverse will not break. It looks tempting to put this in some app other than root, this will cause a conflict in namespace and may break something inside oauth toolkit.
+The special thing about this is that namespace of oauth_toolkit will remain intact, that means the reverse will work properly and internal library reverse calls will not break. It looks tempting to put this in some app other than root, that will cause a conflict in namespace and may break something inside oauth toolkit.
 
 ## The Auth Flows
 
@@ -89,7 +89,7 @@ Oauth toolkit supports 4 authorization flows
 
 ### Authorization  Code flow
 
-The most commonly used flow, that goes like this authentication --> token --> access tokenwith some url redirects. Access Token represents a user
+The most commonly used flow, that goes like this authentication --> token --> access token with some url redirects. Access Token represents a user
 
 ### Client Credential flow
 
@@ -124,17 +124,17 @@ class SettingsScopes(BaseScopes):
         return oauth2_settings._DEFAULT_SCOPES
 ```
 
-My findings after try to implement custom scopes is that it is a tiny mess, since oauth tookit in a wrapper around oauthlib The control of Scopes is distributed between two libraries. By default there are two scopes read and write configured in the settings, that anyone who asks for get it. This is not suitable if the project consists of multiple types of users or multiple levels of access. Before stating a solution lets understand what the three methods do.
+My findings after try to implement custom scopes is that it is a tiny mess, since oauth toolkit in a wrapper around oauthlib The control of Scopes is distributed between two libraries. By default there are two scopes read and write configured in the settings, anyone who asks for them gets them. This is not suitable if the project consists of multiple types of users or multiple levels of access. Before stating a solution lets understand what the three methods do.
 
 #### get_all_scopes
 
-This methods is being used at a number of places in oauth toolkit for getting all scopes that the project supports, by all it means all. Authorization does not work if request has some scope that this method is not returning.
+This methods is being used at a number of places in oauth toolkit for getting all scopes that the project supports, *by all it means all*. Authorization does not work if request has some scope that this method is not returning.
 
-get_available_scopes
+#### get_available_scopes
 
-This method is special as it has 2 arguments **application** and **request** which gives us the oppurtunity to trim down scopes based on application or user in request. But the limitation here is that the built in usage of this method is either by application or by request. So extended logic should be written with that in mind.
+This method is special as it has 2 arguments **application** and **request** which gives us the opportunity to trim down scopes based on application or user in request. But the limitation here is that the built in usage of this method is either by application or by request. So extended logic should be written with that in mind.
 
-get_default_scopes
+#### get_default_scopes
 
 *404* usage not found 😑 , it is safe to just skip this method.
 
@@ -181,7 +181,7 @@ phone : To return phone number
 
 ### OAuth2Validator
 
-This class is loaded with methods that validate a number of things and it is really easy to break whole oauth toolkit but there is  a method that needs to be configured to add additional information in claims
+This class is loaded with methods that validate a number of things and it is really easy to break the whole of oauth toolkit but there is a method that needs to be configured to add additional information in claims
 
 ```python
 from oauth_provider.oauth2_validator import OAuth2Validator
@@ -210,11 +210,11 @@ OAUTH2_PROVIDER = {
 
 ## The OpenID connect support
 
-[OpenID](https://openid.net/connect/) is simple an encoded token( not access token) that contains information about user, some timestamps and it can be verified via public keys. 
+[OpenID](https://openid.net/connect/) is simply an encoded token( not access token) that contains information about user, some timestamps and it can be verified via public keys from **jwks endpoint**. 
 
 ## The Introspect and its limitation
 
-Introspect is a feature that enables remote server(with token / credentials) to validate incoming access tokens. This seems a bit redundant as each time a resource is requested server will make a introspection request. But it is not like that oauth toolkit only introspects if token is already not present in its database otherwise it will request introspection and save token locally for future use until it expires. This creates a problem, if a token gets revoked before expiry there is not way of revoking token from remote server. This is where expiry times of access token and refresh token come to play. If access token expries in next 15 minutes or 30 minutes resource will automatically invalidate token and refresh token needs to be more than 30 minutes in order to continuously exchange new tokens after expiry on back. 
+Introspect is a feature that enables remote server(with token / credentials) to validate incoming access tokens. This seems a bit redundant as each time a resource is requested server will make a introspection request. But it is not like that oauth toolkit only introspects if token is already not present in its database otherwise it will request introspection and save token locally for future use until it expires. This creates a problem, if a token gets revoked before expiry there is not way of revoking token from remote server. This is where expiry times of access token and refresh token come to play. If access token expires in next 15 minutes or 30 minutes resource will automatically invalidate token and refresh token needs to be more than 30 minutes in order to continuously exchange new tokens after expiry on back. 
 
 Other method is to create an API interface for each resource server that will delete targeted tokens 
 
