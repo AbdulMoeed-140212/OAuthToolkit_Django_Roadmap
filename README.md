@@ -1,1 +1,65 @@
-# OAuthToolkit_Django_Roadmap
+# A Roadmap to oAuth toolkit in Django
+
+This is a journal about my findings while try to make microservice project.
+
+## Roadblock 01
+
+While planning out a basic structure for microservices there were roadblock at every step, although I have developed a few monolith applications this did not go easy. One of the many road blocks was authentication process, in a basic app it is either a session based authentication or a login rest api that exchanges user credentials with token and then token is used for rest of the processes. 
+
+The requirement was something like this , there will be *x* number of mini projects (distributed over unknown systems) that will be for internal use and then there can be *y* number of 3rd party applications that can use some of the previously mentioned projects. Using traditional approach is acceptable if there are no 3rd party applications. The most basic of setup for authentication needs 2 api one for token exchange and second for verifying that token.
+
+### Why OAuth2?
+
+Because 3rd party will get access to a user credentials and this is not something that can be left on the good will of other side 😅. This is where oAuth2 comes in the story, oAuth2 is quite complex so read [this](https://auth0.com/intro-to-iam/what-is-oauth-2/). oAuth2 is not for **authentication**(*authN*) it is only for **authorization**(*authZ*) 
+
+#### What's the difference?
+
+Exchanging credentials and verifying a user is **authN** and transferring authority to another application(frontend, 3rd app) is **authZ**
+
+oAuth2 allows us to separate Authentication process with two parts authN and Authorization. This way we can make sure user credentials  (email, username, password) directly reach us without any intervention.
+
+#### What's the process of oAuth2?
+
+After a user is authenticated it receives a token let call it **grant token**. This token is useless as it will not work for any resource. Its sole purpose is to exchange it with an **Access Token**. An access token is the one  that will have access to resource based on its *Scopes*.
+
+#### What are Scopes
+
+A Scope is a permission it requested in very beginning of authorization process and is attached to the final *Access Token*. A user can ask for any of the available scopes but will only get what that user is allowed to. The restriction is implemented on the resource side. The resource gets an access token , along with scopes then decides whether it qualifies to user that resource 👮‍♂️. 
+
+#### Are Scopes encoded in Access Token?
+
+No, Access Token has no information in it, it is simple a piece of string. There are two cases, Auth Server and Resource Server.
+
+##### Auth server
+
+This project creates token while authorization process that is  why it has all the scopes saved so  when ever a token comes scopes are fetched from database
+
+##### Resource Server
+
+This project needs to verify token for this there is feature call **Introspection**. On Auth server there is an api which takes token and verity's it and responds with scopes and other related data.
+
+#### What about the user info?
+
+In OAuth there is a concept of claims. Claims are just keywords that let you amount of user info. read [this](https://github.com/jazzband/django-oauth-toolkit/blob/f835a243811aa9fcb54f559350daf5758249c66b/oauth2_provider/oauth2_validators.py#L73) is a mapping of standard claims and their respective scopes, it means that a  claim with work only if  user has a specific scope.
+
+#### How to logout?
+
+In oAuth2 there is no such thing as logout, Just delete the token and user will lose access to resources😋 
+
+This is what I would like to say but it is a little complicated, There is another token known as the **Refresh token**. It comes along with the *Access token*. OAuth proposes a system where access token has small duration for validity and refresh token has relatively large duration of validity. Users are supposed to user Refresh token to get new Access token whenever an Access token expires. By this logic if we remove refresh token on Auth server user will not be able to continue after Access token expires. To Invalidate/Remove Refresh token OAuth uses a term **Revoke**. The user will immediately lose access after using revoke api. 
+
+**Note:** Before going further oAuth protocol assumes that everything will be done on HTTP protocol under SSL encryption if any of the token gets leaked while a transaction the user will be compromised. Both Access Token and Refresh Token are supposed to be secured safely on client side.   
+
+## Roadblock 02
+
+At this point the user credential leakage issue is solved what's next? Lets see, We have an AUTH server that will grant a token and resource servers can accept or reject. The next thing is service breakdown. How should you break a Single code base app into multiple small code bases. There is a one way where each mini project is directly accessed by external user. It requires an Api Gateway for management and access control. The other way is to split heavy lifiting as sub project. For example for sending email a separate project can be setup for sole purpose of sending Email, a mini project to run perodic cleanup jobs etc. Each split of project may or may not require extra resource. Lets say a simple Django app requires A machine to run code and a database instance, if we split the email service we only need a new machine to run service, perodic jobs service can be connected to main database with read only restriction.
+
+## Sanity Rules
+
+Rules to make sure that microservices do not become Spaghetti 
+
+## How to oAuth toolkit?
+
+### What is oAuth toolkit?
+
+oAuth toolkit is a python package that extends  [oauthlib](https://github.com/oauthlib/oauthlib) for Django framework. It contains basic implementation of oAuth1, oAuth2 and OpenID connect protocols. 
