@@ -47,9 +47,21 @@ OAUTH2_PROVIDER_GRANT_MODEL = "customapp.Grant"
 OAUTH2_PROVIDER_REFRESH_TOKEN_MODEL = "customapp.RefreshToken"
 ```
 
+> Note: Try not to import a class directly from oauth_provider instead look for a get_XX_class method at the bottom of respective file. Reason being that in future if there is any class that needs to be overridden or replaced you will not have to go to the depth of project and rename all imports.
+>
+> ```python
+> # if you need to use application class 
+> from oauth_provider.models import Application
+> # try this instead
+> from oauth_provider.models import get_application_model
+> Application = get_application_model()
+> ```
+
+
+
 ## What next?
 
-Next should be integrating oauth urls in your url configuration. I recommend to include oauth_provider.urls in root url.py of the project. The default url coniguration will contain Application and token management pages. If they are not required they can be removed as follows
+Next should be integrating oauth urls in your url configuration. I recommend to include oauth_provider.urls in root url.py of the project. The default url configuration will contain Application and token management pages. If they are not required they can be removed as follows
 
 ```python
 # rootapp/urls.py
@@ -91,5 +103,118 @@ This is depreciated it is a basic flow that exchanges user credentials and token
 
 This is for a case where backend and frontend need 2 separate tokens, it is same as Authorization Code flow but with an  extra token exchange for frontend. Before working on this make sure you know about URL [fragment](https://en.wikipedia.org/wiki/URI_fragment).
 
+## The Overrides
 
+An override is something needed to add/remove features from python class. For oath toolkit there are many methods that are intentionally left empty, so that developers can import, inherit in their class and add additional features according to their requirements. This is optional but **SettingsScopes** and **OAuth2Validator** two classes that need some tweaks for making additional settings work properly.
+
+### SettingsScopes
+
+```python
+# oauth_provider.scopes.py
+from .settings import oauth2_settings # see oauth_provider.settings.py for default SCOPE, _SCOPE and _DEFAULT_SCOPES values
+
+class SettingsScopes(BaseScopes):
+    def get_all_scopes(self):
+        return oauth2_settings.SCOPES
+
+    def get_available_scopes(self, application=None, request=None, *args, **kwargs):
+        return oauth2_settings._SCOPES
+
+    def get_default_scopes(self, application=None, request=None, *args, **kwargs):
+        return oauth2_settings._DEFAULT_SCOPES
+```
+
+My findings after try to implement custom scopes is that it is a tiny mess, since oauth tookit in a wrapper around oauthlib The control of Scopes is distributed between two libraries. By default there are two scopes read and write configured in the settings, that anyone who asks for get it. This is not suitable if the project consists of multiple types of users or multiple levels of access. Before stating a solution lets understand what the three methods do.
+
+#### get_all_scopes
+
+This methods is being used at a number of places in oauth toolkit for getting all scopes that the project supports, by all it means all. Authorization does not work if request has some scope that this method is not returning.
+
+get_available_scopes
+
+This method is special as it has 2 arguments **application** and **request** which gives us the oppurtunity to trim down scopes based on application or user in request. But the limitation here is that the built in usage of this method is either by application or by request. So extended logic should be written with that in mind.
+
+get_default_scopes
+
+*404* usage not found 😑 , it is safe to just skip this method.
+
+Example:
+
+```python
+from oauth_provider.scopes import SettingsScopes # since class is being override cannot use get method
+from oauth_provider.models import get_application_model
+class CustomSettingsScopes(SettingsScopes):
+    # Add Scopes dynamically
+    def get_all_scopes(self):
+        scopes = oauth2_settings.SCOPES
+        applications = list(get_application_model().objects.all().value_list('name', flat=True))
+        temp = " application access"
+       	additional_scopes = {k: k+temp for k in applications}
+        scopes.update(additional_scopes)
+        scopes['admin'] = "For admin access"
+        return scopes 
+
+    def get_available_scopes(self, application=None, request=None, *args, **kwargs):
+        if request and request.user and request.user.is_superuser:
+            return oauth2_settings._SCOPES + ['admin']
+        return oauth2_settings._SCOPES
+```
+```python
+# root/settings.py
+OAUTH2_PROVIDER = {
+    "SCOPES_BACKEND_CLASS" : "custom_app.override.CustomSettingsScopes",
+    ....
+}
+```
+#### Scopes that are available but not active
+
+```
+openid : For openid connect, requires application to have Encryption method set 
+introspect : A token can only be introspected if this scope is available in token
+profile : To return extra claims in id_token and userinfo endpoint
+email : To return email
+phone : To return phone number
+
+```
+
+
+
+### OAuth2Validator
+
+This class is loaded with methods that validate a number of things and it is really easy to break whole oauth toolkit but there is  a method that needs to be configured to add additional information in claims
+
+```python
+from oauth_provider.oauth2_validator import OAuth2Validator
+class CustomValidator(OAuth2Validator):
+	def get_additional_claims(self, request):
+        if not request:
+            return {}
+        # For these claims to appear appropriate scopes should be in the token
+        return {
+            "family_name": request.user.first_name,
+        	"given_name": request.user.last_name,
+            "email": request.user.email,
+            "picture": reqeust.user.profile_pic,
+        }
+```
+
+```python
+# root/settings.py
+OAUTH2_PROVIDER = {
+    "OAUTH2_VALIDATOR_CLASS": "custom_app.override.CustomValidator",
+    ....
+}
+```
+
+
+
+## The OpenID connect support
+
+[OpenID](https://openid.net/connect/) is simple an encoded token( not access token) that contains information about user, some timestamps and it can be verified via public keys. 
+
+## The Introspect and its limitation
+
+Introspect is a feature that enables remote server(with token / credentials) to validate incoming access tokens. This seems a bit redundant as each time a resource is requested server will make a introspection request. But it is not like that oauth toolkit only introspects if token is already not present in its database otherwise it will request introspection and save token locally for future use until it expires. This creates a problem, if a token gets revoked before expiry there is not way of revoking token from remote server. This is where expiry times of access token and refresh token come to play. If access token expries in next 15 minutes or 30 minutes resource will automatically invalidate token and refresh token needs to be more than 30 minutes in order to continuously exchange new tokens after expiry on back. 
+
+Other method is to create an API interface for each resource server that will delete targeted tokens 
 
