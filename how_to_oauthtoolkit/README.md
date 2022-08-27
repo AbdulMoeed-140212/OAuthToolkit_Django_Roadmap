@@ -218,3 +218,17 @@ Introspect is a feature that enables remote server(with token / credentials) to 
 
 Other method is to create an API interface for each resource server that will delete targeted tokens 
 
+### How to setup introspection in Resource Server
+
+In django project install oauth toolkit. Acquire introspect url and application token/credentials(client_id,client_secret). Place them in settings.py like this
+
+``` python
+OAUTH2_PROVIDER = {
+    ...
+    'RESOURCE_SERVER_INTROSPECTION_URL': 'https://example.org/o/introspect/',
+    'RESOURCE_SERVER_AUTH_TOKEN': '3yUqsWtwKYKHnfivFcJu', # OR this but not both:
+    # 'RESOURCE_SERVER_INTROSPECTION_CREDENTIALS': ('rs_client_id','rs_client_secret'),
+    ...
+}
+```
+An additional perk of using django with oauth toolkit is that a partial user object will be created on first token access in the resource server. In a Resource server models can be linked to User model via foreign key and everything will work with any additional setup 🐱‍🏍
